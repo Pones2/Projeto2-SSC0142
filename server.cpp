@@ -10,12 +10,21 @@
 #include <sstream>
 #include <algorithm>
 #include <iterator>
+#include <signal.h>
 
 std::mutex queueMutex;
 std::queue<std::pair<std::string,std::string>> messageQueue;
 std::vector<int> clientIds;
 std::map<std::string, int> nickToId;
 std::map<std::string, std::set<int>> channelToClients;
+
+#define MAX_RETRIES 5
+
+void handleSignal(int signal) {
+    if (signal == SIGINT) {
+        std::cout << "Signal SIGINT received." << std::endl;
+    }
+}
 
 void HandleClient(ServerSocket* mySocket, int id) {
     std::cout << "Entrando " << id << "\n";
@@ -51,7 +60,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
 
     std::string nickname = "Unknown " + std::to_string(id);
     bool setNickname = false;
-    while(true) {
+    while(std::find(clientIds.begin(), clientIds.end(),id) != clientIds.end()) {
         std::string s = mySocket->ReceiveData(id);
         iss = std::istringstream(s);
         std::copy(std::istream_iterator<std::string>(iss), std::istream_iterator<std::string>(), std::back_inserter(tokens));
@@ -104,18 +113,26 @@ void PrintMessages(ServerSocket* mySocket) {
     while(true) {
         queueMutex.lock();
         if(!messageQueue.empty()) {
-            for(auto& id : channelToClients[messageQueue.front().first]) {
-                mySocket->SendData(messageQueue.front().second, id);
+            for (auto &id: channelToClients[messageQueue.front().first]) {
+                for (int i = 0; i < MAX_RETRIES; i++) {
+                    if (mySocket->SendData(messageQueue.front().second, id) != false)
+                        break;
+                    else
+                        if (i >= MAX_RETRIES - 1)
+                            clientIds.erase(std::find(clientIds.begin(), clientIds.end(),id));
+                }
             }
             messageQueue.pop();
         }
         queueMutex.unlock();
-    } 
+    }
 }
 
 int main() {
     int port;
-    
+
+    signal(SIGINT, handleSignal);
+
     std::cout << "Port: ";
     std::cin >> port;
 
