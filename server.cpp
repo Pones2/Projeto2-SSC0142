@@ -62,6 +62,8 @@ void HandleClient(ServerSocket* mySocket, int id) {
     bool setNickname = false;
     while(std::find(clientIds.begin(), clientIds.end(),id) != clientIds.end()) {
         std::string s = mySocket->ReceiveData(id);
+        if(s == "")
+            continue;
         iss = std::istringstream(s);
         std::copy(std::istream_iterator<std::string>(iss), std::istream_iterator<std::string>(), std::back_inserter(tokens));
         
@@ -107,6 +109,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
     }
     queueMutex.unlock();
     close(id);
+    std::cout << "Fechou o " << id << "\n";
 }
 
 void PrintMessages(ServerSocket* mySocket) {
