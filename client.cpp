@@ -2,6 +2,7 @@
 #include <thread>
 #include <string>
 #include "ClientSocket.hpp"
+#include <signal.h>
 
 void HandleReceive(ClientSocket* mySocket) {
     while(mySocket->IsConnected()) {
@@ -9,8 +10,14 @@ void HandleReceive(ClientSocket* mySocket) {
     }
 }
 
+void handleSignal(int signal) {
+    if (signal == SIGINT) {
+        std::cout << "Signal SIGINT received." << std::endl;
+    }
+}
+
 int main() {
-    
+    signal(SIGINT, handleSignal);
     // Starts connection
     std::cout << "To start connection, use the command /connect <server_ip> <server_port>\n";
     std::string serverAddress;
