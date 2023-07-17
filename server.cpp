@@ -17,6 +17,7 @@ std::queue<std::pair<std::string,std::string>> messageQueue;
 std::vector<int> clientIds;
 std::map<std::string, int> nickToId;
 std::map<std::string, std::set<int>> channelToClients;
+std::map<std::string, std::string> channelToAdmin;
 
 #define MAX_RETRIES 5
 
@@ -27,6 +28,7 @@ void handleSignal(int signal) {
 }
 
 void HandleClient(ServerSocket* mySocket, int id) {
+    bool isAdmin;
     std::cout << "Entrando " << id << "\n";
     std::string joinMessage = mySocket->ReceiveData(id);
     std::cout << "Recebi o join " << joinMessage << "\n";
@@ -45,9 +47,11 @@ void HandleClient(ServerSocket* mySocket, int id) {
         channelToClients[tokens[1]].insert(id);
         queueMutex.unlock();
         std::cout << "Inseri no canal\n";
+        isAdmin = false;
     }
     
     else {
+        isAdmin = true;
         queueMutex.lock();
         channelToClients[tokens[1]] = std::set<int>();
         channelToClients[tokens[1]].insert(id);
@@ -88,6 +92,23 @@ void HandleClient(ServerSocket* mySocket, int id) {
             tokens.clear();
             continue;
         }
+        
+        else if(tokens[0] == "/whois") {
+            if(isAdmin) {
+                if(nickToId.count(tokens[1]) == 1) {
+                    std::string userIP = mySocket->GetIPBySocketID(nickToId[tokens[1]]);
+                    mySocket->SendData(tokens[1] + " IP: " +  userIP, id);
+                }
+                else {
+                    mySocket->SendData("User " + tokens[1] + " not found", id); 
+                }
+            }
+            else {
+                mySocket->SendData(std::string("You do not have permission to use /whois"), id);
+            }
+            tokens.clear();
+            continue;
+        }
 
         queueMutex.lock();
         messageQueue.push(std::make_pair(channel, nickname + ": " + s));
@@ -118,11 +139,15 @@ void PrintMessages(ServerSocket* mySocket) {
         if(!messageQueue.empty()) {
             for (auto &id: channelToClients[messageQueue.front().first]) {
                 for (int i = 0; i < MAX_RETRIES; i++) {
-                    if (mySocket->SendData(messageQueue.front().second, id) != false)
+                    if (mySocket->SendData(messageQueue.front().second, id)) {
+                        std::cout << "Enviou para o " << id << "\n";
                         break;
-                    else
+                    }
+                    else {
+                        std::cout << "Falhou envio para o " << id << " " << i << " vez\n";
                         if (i >= MAX_RETRIES - 1)
                             clientIds.erase(std::find(clientIds.begin(), clientIds.end(),id));
+                    }
                 }
             }
             messageQueue.pop();

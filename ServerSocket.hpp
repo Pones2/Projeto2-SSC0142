@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstring>
 #include <string>
+#include <map>
 #include <unistd.h>
 #include <sys/types.h> 
 #include <sys/socket.h>
@@ -13,7 +14,7 @@ private:
     int socketId;
     static constexpr int maxSize = 4096; // Max message size according to specification
     struct sockaddr_in sockServerAddress;
-    
+    std::map<int, struct sockaddr_in> clientAdresses;
 public:
     // Default Constructor
     ServerSocket(int port);
@@ -33,4 +34,7 @@ public:
     // Receives data up to max limit
     // Returns true if success and false otherwise
     std::string ReceiveData(int clientId);
+
+    // Returns IP as string by client ID
+    std::string GetIPBySocketID(int clientId);
 };

@@ -7,7 +7,8 @@
 void HandleReceive(ClientSocket* mySocket) {
     while(mySocket->IsConnected()) {
         std::string s = mySocket->ReceiveData();
-        std::cout << mySocket->ReceiveData() << "\n";
+        if(s != "")
+            std::cout << s << "\n";
     }
 }
 
@@ -53,7 +54,7 @@ int main() {
         std::getline(std::cin, s);
         std::cout << "VOU MANDAR " << s << "\n";
         mySocket.SendData(s);
-        if(s == "/quit")
+        if(s == "/quit" or std::cin.eof())
             break;
     }
     
