@@ -19,16 +19,17 @@ std::map<std::string, int> nickToId;
 std::map<std::string, std::set<int>> channelToClients;
 std::map<std::string, std::string> channelToAdmin;
 
-#define MAX_RETRIES 5
+#define MAX_RETRIES 5 //numero maximo de retries para enviar a mensagem
 
+//trata o sinal do ctrl + C para ser ignorado e mandar a mensagem
 void handleSignal(int signal) {
     if (signal == SIGINT) {
         std::cout << "Signal SIGINT received." << std::endl;
     }
 }
 
-void HandleClient(ServerSocket* mySocket, int id) {
-    bool isAdmin;
+void HandleClient(ServerSocket* mySocket, int id) {//funcao para rodar um cliente
+    bool isAdmin;//varaivel que somente o primeiro tera true(o admin)
     std::cout << "Entrando " << id << "\n";
     std::string joinMessage = mySocket->ReceiveData(id);
     std::cout << "Recebi o join " << joinMessage << "\n";
@@ -42,7 +43,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
         return;
     }
 
-    if(channelToClients.count(tokens[1]) != 0) {
+    if(channelToClients.count(tokens[1]) != 0) {//conectar no canal e caso ele tenha mais de 1 usuario
         queueMutex.lock();
         channelToClients[tokens[1]].insert(id);
         queueMutex.unlock();
@@ -50,7 +51,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
         isAdmin = false;
     }
     
-    else {
+    else {//caso seja a primeira pessoa a conectar no canal, entao sera o admin
         isAdmin = true;
         queueMutex.lock();
         channelToClients[tokens[1]] = std::set<int>();
@@ -64,14 +65,14 @@ void HandleClient(ServerSocket* mySocket, int id) {
 
     std::string nickname = "Unknown " + std::to_string(id);
     bool setNickname = false;
-    while(std::find(clientIds.begin(), clientIds.end(),id) != clientIds.end()) {
+    while(std::find(clientIds.begin(), clientIds.end(),id) != clientIds.end()) {//enquanto o cliente ainda estar conectado continua esperando mensagens
         std::string s = mySocket->ReceiveData(id);
         if(s == "")
             continue;
         iss = std::istringstream(s);
         std::copy(std::istream_iterator<std::string>(iss), std::istream_iterator<std::string>(), std::back_inserter(tokens));
         
-        if(tokens[0] == "/quit") {
+        if(tokens[0] == "/quit") {//pega os comandos
             break;
         }
         else if(tokens[0] == "/ping") {
@@ -93,7 +94,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
             continue;
         }
         
-        else if(tokens[0] == "/whois") {
+        else if(tokens[0] == "/whois") {//comando de administrador
             if(isAdmin) {
                 if(nickToId.count(tokens[1]) == 1) {
                     std::string userIP = mySocket->GetIPBySocketID(nickToId[tokens[1]]);
@@ -115,7 +116,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
         queueMutex.unlock();
         tokens.clear();
     }
-    
+    //para fechar a conexao com o cliente
     queueMutex.lock();
     if(setNickname)
         nickToId.erase(nickname);
@@ -133,7 +134,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
     std::cout << "Fechou o " << id << "\n";
 }
 
-void PrintMessages(ServerSocket* mySocket) {
+void PrintMessages(ServerSocket* mySocket) {//printar uma mensagem para todos os clientes
     while(true) {
         queueMutex.lock();
         if(!messageQueue.empty()) {
