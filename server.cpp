@@ -18,6 +18,7 @@ std::vector<int> clientIds;
 std::map<std::string, int> nickToId;
 std::map<std::string, std::set<int>> channelToClients;
 std::map<std::string, std::string> channelToAdmin;
+std::vector<int> mutedNicknames;
 
 #define MAX_RETRIES 5 //numero maximo de retries para enviar a mensagem
 
@@ -110,10 +111,43 @@ void HandleClient(ServerSocket* mySocket, int id) {//funcao para rodar um client
             tokens.clear();
             continue;
         }
+        else if(tokens[0] == "/mute") {
+            // Check Admin
+            if(isAdmin) {
+                queueMutex.lock();
+                mutedNicknames.push_back(nickToId[tokens[1]])
+                queueMutex.unlock();
+            }else {
+                mySocket->SendData(std::string("You do not have permission to use /mute"), id);
+            }
+            tokens.clear();
+            continue;
+        }
+        else if(tokens[0] == "/unmute") {
+            //Check admin
+            if(isAdmin) {
+                queueMutex.lock();
+                mutedNicknames.erase(std::remove(mutedNicknames.begin(), mutedNicknames.end(), nickToId[tokens[1]]), mutedNicknames.end());
+                queueMutex.unlock();
+            }else {
+                mySocket->SendData(std::string("You do not have permission to use /unmute"), id);
+            }
+            tokens.clear();
+            continue;
+        }
 
-        queueMutex.lock();
-        messageQueue.push(std::make_pair(channel, nickname + ": " + s));
-        queueMutex.unlock();
+        // Check if user is muted
+        if(std::count(mutedNicknames.begin(), mutedNicknames.end(), id)){
+            queueMutex.lock();
+            messageQueue.push(std::make_pair(channel, nickname + ": " + s));
+            queueMutex.unlock();
+        }
+        tokens.clear();
+        if(std::count(mutedNicknames.begin(), mutedNicknames.end(), id)){
+            queueMutex.lock();
+            messageQueue.push(std::make_pair(channel, nickname + ": " + s));
+            queueMutex.unlock();
+        }
         tokens.clear();
     }
     //para fechar a conexao com o cliente
