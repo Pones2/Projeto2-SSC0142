@@ -2,6 +2,7 @@
 #include <cstring>
 #include <string>
 #include <map>
+#include <mutex>
 #include <unistd.h>
 #include <sys/types.h> 
 #include <sys/socket.h>
@@ -14,6 +15,7 @@ private:
     int socketId;
     static constexpr int maxSize = 4096; // Max message size according to specification
     struct sockaddr_in sockServerAddress;
+    std::map<int, std::mutex> writeSocketMutex;
     std::map<int, struct sockaddr_in> clientAdresses;
 public:
     // Default Constructor

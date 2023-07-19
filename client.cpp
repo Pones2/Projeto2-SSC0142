@@ -41,12 +41,6 @@ int main() {
     std::cout << "Connection complete!\n";
 
     std::cout << "To join a channel, use the command /join <channel_name>\n";
-    std::string channelName;
-    
-    while(auxString != "/join") {//para se conectar com um canal em especifico
-        std::cin >> auxString >> channelName;
-    }
-    mySocket.SendData(auxString + " " + channelName);
 
     std::thread ReceiveThread(HandleReceive, &mySocket);
 

@@ -27,7 +27,7 @@ bool ServerSocket::Bind() {
 }
 
 int ServerSocket::Accept() {
-    struct sockaddr_in sockClientAddress;
+    struct sockaddr sockClientAddress;
     socklen_t clilen = sizeof(sockClientAddress);
     int socketClientId = accept(socketId, (struct sockaddr*)&sockClientAddress, &clilen);
     clientAdresses[socketClientId] = sockClientAddress;
@@ -35,18 +35,22 @@ int ServerSocket::Accept() {
 }
 
 bool ServerSocket::SendData(const std::string& data, int clientId) {
+    writeSocketMutex[clientId].lock();
     const char* dataPtr = data.c_str();
     int totalSizeToSend = data.size();
     
     while(totalSizeToSend > 0) {
         int sizeToSend = std::min(maxSize, totalSizeToSend);
         int bytesSent = send(clientId, dataPtr, sizeToSend, 0);
-        if(bytesSent <= 0)
+        if(bytesSent <= 0) {
+            writeSocketMutex[clientId].unlock();
             return false;
+        }
         totalSizeToSend -= bytesSent;
         dataPtr += bytesSent;
     }
     
+    writeSocketMutex[clientId].unlock();
     return true;
 }
 
