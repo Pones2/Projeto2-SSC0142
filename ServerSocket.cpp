@@ -27,7 +27,7 @@ bool ServerSocket::Bind() {
 }
 
 int ServerSocket::Accept() {
-    struct sockaddr sockClientAddress;
+    struct sockaddr_in sockClientAddress;
     socklen_t clilen = sizeof(sockClientAddress);
     int socketClientId = accept(socketId, (struct sockaddr*)&sockClientAddress, &clilen);
     clientAdresses[socketClientId] = sockClientAddress;
@@ -65,7 +65,7 @@ std::string ServerSocket::ReceiveData(int clientId) {
 // Returns IP as string by client ID
 std::string ServerSocket::GetIPBySocketID(int clientId) {
     char str[INET_ADDRSTRLEN];
-    inet_ntop( AF_INET, &(clientAdresses[clientId]), str, INET_ADDRSTRLEN );
+    inet_ntop( AF_INET, &(clientAdresses[clientId].sin_addr), str, INET_ADDRSTRLEN );
 
     return std::string(str);
 }

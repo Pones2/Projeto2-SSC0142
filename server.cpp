@@ -58,6 +58,9 @@ void HandleClient(ServerSocket* mySocket, int id) {
     std::istringstream iss;
     
     std::string nickname = "Unknown" + std::to_string(id);
+    nickToIdMutex.lock();
+    nickToId[nickname] = id;
+    nickToIdMutex.unlock();
     bool setNickname = false;
     std::string channel;
     
@@ -65,6 +68,8 @@ void HandleClient(ServerSocket* mySocket, int id) {
     // While the connection persists, the loop continues.
     while(isConnected(id)) {
         std::string s = mySocket->ReceiveData(id);
+        if(!isConnected(id))
+            break;
 
         // Filtering empty data
         if(s == "")
@@ -78,6 +83,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
         
         // /quit or EOF ends connection
         if(tokens[0] == "/quit") {
+            mySocket->SendData("quit", id); // Thread Safe
             break;
         }
         
@@ -178,6 +184,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
         else if(tokens[0] == "/mute") {
             nickToIdMutex.lock();
             channelMutedIdsMutex[channel].lock();
+            channelToClientsMutex[channel].lock();
             // If user isn't connected to a channel
             if(!isInChannel) {
                 mySocket->SendData("This command can only be executed after joining a channel", id); // Thread Safe
@@ -185,7 +192,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
             
             // If user has admin permission
             else if(isAdmin) {
-                if(channelMutedIds[channel].count(nickToId[tokens[1]]) == 0)
+                if(channelMutedIds[channel].count(nickToId[tokens[1]]) == 0 and channelToClients[channel].count(nickToId[tokens[1]]) != 0)
                     channelMutedIds[channel].insert(nickToId[tokens[1]]);
 
             }
@@ -198,13 +205,15 @@ void HandleClient(ServerSocket* mySocket, int id) {
             tokens.clear();
             nickToIdMutex.unlock();
             channelMutedIdsMutex[channel].unlock();
+            channelToClientsMutex[channel].unlock();
             continue;
         }
 
-        // /unmute reverts the muting of a chosen user
+        // /unmute allows admin to revert the muting of a chosen user
         else if(tokens[0] == "/unmute") {
             nickToIdMutex.lock();
             channelMutedIdsMutex[channel].lock();
+            channelToClientsMutex[channel].lock();
             // If user isn't connected to a channel
             if(!isInChannel) {
                 mySocket->SendData("This command can only be executed after joining a channel", id); // Thread Safe
@@ -212,7 +221,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
             
             // If user has admin permission
             else if(isAdmin) {
-                if(channelMutedIds[channel].count(nickToId[tokens[1]]) != 0)
+                if(channelMutedIds[channel].count(nickToId[tokens[1]]) != 0 and channelToClients[channel].count(nickToId[tokens[1]]) != 0)
                     channelMutedIds[channel].erase(nickToId[tokens[1]]);
             }
             
@@ -220,15 +229,55 @@ void HandleClient(ServerSocket* mySocket, int id) {
             else {
                 mySocket->SendData(std::string("You do not have permission to use /unmute"), id); // Thread Safe
             }
+
             tokens.clear();
             nickToIdMutex.unlock();
             channelMutedIdsMutex[channel].unlock();
+            channelToClientsMutex[channel].unlock();
             continue;
+        }
+        
+        // /kick kicks a chosen user
+        else if(tokens[0] == "/kick") {
+            nickToIdMutex.lock();
+            channelToClientsMutex[channel].lock();
+
+            // If user isn't connected to a channel
+            if(!isInChannel) {
+                mySocket->SendData("This command can only be executed after joining a channel", id); // Thread Safe
+            }
+
+            // If user has admin permission
+            else if(isAdmin) {
+                clientIdsMutex.lock();
+                if(channelToClients[channel].count(nickToId[tokens[1]]) != 0) {
+                    clientIds.erase(nickToId[tokens[1]]);
+                    channelToClients[channel].erase(nickToId[tokens[1]]);
+                    mySocket->SendData("quit", id);
+                }
+
+                clientIdsMutex.unlock();
+            }
+            
+            // If user doesn't have admin permission
+            else {
+                mySocket->SendData(std::string("You do not have permission to use /kick"), id); // Thread Safe
+            }
+
+            tokens.clear();
+            nickToIdMutex.unlock();
+            channelToClientsMutex[channel].unlock();
+            continue;
+        }
+        
+        // Error message if client is not in channel
+        if(!isInChannel) {
+            mySocket->SendData("Join a channel to send messages", id);
         }
 
         // If it isn't a command and the user isn't muted, the message is put in the message queue
         channelMutedIdsMutex[channel].lock();
-        if(channelMutedIds[channel].count(id) == 0){
+        else if(channelMutedIds[channel].count(id) == 0){
             queueMutex.lock();
             messageQueue.push(std::make_pair(channel, nickname + ": " + s));
             queueMutex.unlock();
@@ -247,7 +296,8 @@ void HandleClient(ServerSocket* mySocket, int id) {
 
     // Erasing id from channel
     channelToClientsMutex[channel].lock();
-    channelToClients[channel].erase(id);
+    if(channelToClients[channel].count(id) != 0)
+        channelToClients[channel].erase(id);
     channelToClientsMutex[channel].unlock();
 
     // Erasing id from set of connected clients, if not erased before

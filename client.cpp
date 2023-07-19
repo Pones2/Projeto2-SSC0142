@@ -1,27 +1,61 @@
 #include <iostream>
 #include <thread>
 #include <string>
+#include <vector>
+#include <sstream>
+#include <iterator>
 #include "ClientSocket.hpp"
 #include <signal.h>
 
-void HandleReceive(ClientSocket* mySocket) {//trata as mensagens que recebe do servidor
+
+// Handles received data
+void HandleReceive(ClientSocket* mySocket) {
     while(mySocket->IsConnected()) {
         std::string s = mySocket->ReceiveData();
-        if(s != "")
+        if(s != "" and s != "quit")
             std::cout << s << "\n";
+        else if (s == "quit") {
+            std::cout << "You were disconnected\n";
+            mySocket->Disconnect();
+        }
     }
 }
 
-//trata o sinal do ctrl + C para ser ignorado e mandar a mensagem
+// Handles the SIGINT Signal, (CTRL+C).
 void handleSignal(int signal) {
     if (signal == SIGINT) {
         std::cout << "Signal SIGINT received." << std::endl;
     }
 }
 
+// Checks if nickname is in correct format
+bool isNicknameValid(std::string s) {
+    constexpr int maxLength = 50;
+    if(s.length() > maxLength)
+        return false;
+
+    return true;
+}
+
+// Checks if channel name is in correct format
+bool isChannelNameValid(std::string s) {
+    constexpr int maxLength = 200;
+    if(s.length() > maxLength)
+        return false;
+    
+    if(s[0] != '#' and s[0] != '&')
+        return false;
+
+    for(int i = 0; i < (int) s.length(); ++i) {
+        if(s[i] == 7 or s[i] == ',')
+            return false;
+    }
+
+    return true;
+}
+
 int main() {
     signal(SIGINT, handleSignal);
-    //comeca a conexao
     std::cout << "To start connection, use the command /connect <server_ip> <server_port>\n";
     std::string serverAddress;
     int serverPort;
@@ -44,16 +78,49 @@ int main() {
 
     std::thread ReceiveThread(HandleReceive, &mySocket);
 
-    while(true) {//loop de mandar as mensagens para o servidor
+    std::vector<std::string> tokens;
+    std::istringstream iss;
+
+    // Program main loop
+    // While connected, keeps sending messages
+    while(mySocket.IsConnected()) {
         std::string s;
         std::getline(std::cin, s);
-        std::cout << "VOU MANDAR " << s << "\n";
-        mySocket.SendData(s);
-        if(s == "/quit" or std::cin.eof())//espera o ctrl + D ou o quit para parar com o loop
+        iss = std::istringstream(s);
+        std::copy(std::istream_iterator<std::string>(iss), std::istream_iterator<std::string>(), std::back_inserter(tokens));
+
+        // Sends message and quits if necessary
+        if(s == "/quit" or std::cin.eof()) {
+            mySocket.SendData("/quit");
             break;
+        }
+        
+        else if(tokens.size() == 0) {
+            tokens.clear();
+            continue;
+        }
+
+        // Ignores invalid channel names
+        else if(tokens[0] == "/join") {
+            if(isChannelNameValid(tokens[1]) and (int)tokens.size() == 2)
+                mySocket.SendData(s);
+        }
+
+        // Ignores invalid nicknames
+        else if(tokens[0] == "/nickname") {
+            if(isNicknameValid(tokens[1]) and (int)tokens.size() == 2)
+                mySocket.SendData(s);
+        }
+
+        else
+            mySocket.SendData(s);
+
+        tokens.clear();
     }
     
-    mySocket.Disconnect();//realiza a desconexao com o servidor
+    // Ends the connection with the server
+    mySocket.Disconnect();
+    ReceiveThread.join();
 
     return 0;
 }
