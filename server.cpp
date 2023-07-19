@@ -53,7 +53,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
     bool isAdmin = false; // Local variable that says if client is admin at current channel
     bool isInChannel = false; // Local variable that says if client is currently in a channel
 
-    std::cout << "Entrando " << id << "\n";
+    std::cout << "Conectando " << id << "\n";
     std::vector<std::string> tokens;
     std::istringstream iss;
     
@@ -83,12 +83,15 @@ void HandleClient(ServerSocket* mySocket, int id) {
         
         // /quit or EOF ends connection
         if(tokens[0] == "/quit") {
+            std::cout << "Executando /quit " << id << "\n";
             mySocket->SendData("quit", id); // Thread Safe
             break;
         }
         
         // /join allows the user to join a channel
         else if(tokens[0] == "/join") {
+            std::cout << "Executando /join " << id << "\n";
+
             // If the channel already exists
             if(channelToClients.count(tokens[1]) != 0) {
                 // If the client is already in a channel, removes participation from old channel
@@ -138,6 +141,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
         
         // /nickname allows nickname changing
         else if(tokens[0] == "/nickname") {
+            std::cout << "Executando /nickname " << id << "\n";
             nickToIdMutex.lock();
             if(nickToId.count(tokens[1]) != 0) {
                 nickToIdMutex.unlock();
@@ -182,6 +186,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
 
         // /mute allows admins to mute a chosen user
         else if(tokens[0] == "/mute") {
+            std::cout << "Executando /mute " << id << "\n";
             nickToIdMutex.lock();
             channelMutedIdsMutex[channel].lock();
             channelToClientsMutex[channel].lock();
@@ -211,6 +216,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
 
         // /unmute allows admin to revert the muting of a chosen user
         else if(tokens[0] == "/unmute") {
+            std::cout << "Executando /unmute " << id << "\n";
             nickToIdMutex.lock();
             channelMutedIdsMutex[channel].lock();
             channelToClientsMutex[channel].lock();
@@ -239,6 +245,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
         
         // /kick kicks a chosen user
         else if(tokens[0] == "/kick") {
+            std::cout << "Executando /kick " << id << "\n";
             nickToIdMutex.lock();
             channelToClientsMutex[channel].lock();
 
@@ -253,7 +260,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
                 if(channelToClients[channel].count(nickToId[tokens[1]]) != 0) {
                     clientIds.erase(nickToId[tokens[1]]);
                     channelToClients[channel].erase(nickToId[tokens[1]]);
-                    mySocket->SendData("quit", id);
+                    mySocket->SendData("quit", nickToId[tokens[1]]);
                 }
 
                 clientIdsMutex.unlock();
@@ -277,7 +284,7 @@ void HandleClient(ServerSocket* mySocket, int id) {
 
         // If it isn't a command and the user isn't muted, the message is put in the message queue
         channelMutedIdsMutex[channel].lock();
-        else if(channelMutedIds[channel].count(id) == 0){
+        if(isInChannel and channelMutedIds[channel].count(id) == 0){
             queueMutex.lock();
             messageQueue.push(std::make_pair(channel, nickname + ": " + s));
             queueMutex.unlock();
